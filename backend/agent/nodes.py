@@ -20,7 +20,7 @@ from db.embeddings import embed_text
 
 MODEL_PRIMARY   = "llama-3.3-70b-versatile"  # 6k TPM, 100k TPD — best quality
 MODEL_FALLBACK  = "llama-3.1-8b-instant"     # 6k TPM, 500k TPD
-MODEL_FALLBACK2 = "gemma2-9b-it"             # 15k TPM, 500k TPD — highest per-minute limit
+MODEL_FALLBACK2 = "llama3-8b-8192"           # different quota bucket — third fallback
 
 
 def _make_llm(temperature: float = 0.7, max_output_tokens: int = 4096):
@@ -39,7 +39,7 @@ def _make_llm(temperature: float = 0.7, max_output_tokens: int = 4096):
     fallback2 = ChatGroq(
         model=MODEL_FALLBACK2,
         api_key=os.getenv("GROQ_API_KEY"),
-        temperature=temperature,
+        temperature=min(temperature, 1.0),
         max_tokens=max_output_tokens,
     )
     return primary.with_fallbacks([fallback, fallback2], exceptions_to_handle=(Exception,))
