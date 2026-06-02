@@ -510,6 +510,14 @@ async def generate_topics(request: Request, count: int = Query(default=6, ge=1, 
     ]
 
     saved = save_topics(to_save)
+
+    # If DB save failed (e.g. topics table not yet created), still return generated topics
+    if not saved and to_save:
+        raise HTTPException(
+            status_code=500,
+            detail="Topics generated but could not be saved. Please run the V2 Supabase migrations (ALTER TABLE + CREATE TABLE topics) from supabase_migrations.sql then try again."
+        )
+
     return {"topics": saved, "count": len(saved)}
 
 

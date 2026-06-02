@@ -24,8 +24,19 @@ def save_post(data: dict) -> dict:
     if not _supabase_configured():
         return {"id": "local-" + str(abs(hash(data.get("topic", ""))))[:8]}
     sb = get_supabase()
-    result = sb.table("posts").insert(data).execute()
-    return result.data[0] if result.data else {}
+    try:
+        result = sb.table("posts").insert(data).execute()
+        return result.data[0] if result.data else {}
+    except Exception:
+        # Retry without v2 columns in case migrations haven't been run yet
+        v2_cols = {"business_impact_score", "business_impact_rationale"}
+        fallback = {k: v for k, v in data.items() if k not in v2_cols}
+        try:
+            result = sb.table("posts").insert(fallback).execute()
+            return result.data[0] if result.data else {}
+        except Exception as e:
+            print(f"[supabase] save_post failed: {e}")
+            return {}
 
 
 def get_post_by_id(post_id: str) -> Optional[dict]:
@@ -90,28 +101,40 @@ def soft_delete_post(post_id: str) -> None:
 def list_topics(status: str | None = None) -> list[dict]:
     if not _supabase_configured():
         return []
-    sb = get_supabase()
-    query = sb.table("topics").select("*")
-    if status:
-        query = query.eq("status", status)
-    result = query.order("priority_score", desc=True).order("created_at", desc=True).execute()
-    return result.data or []
+    try:
+        sb = get_supabase()
+        query = sb.table("topics").select("*")
+        if status:
+            query = query.eq("status", status)
+        result = query.order("priority_score", desc=True).order("created_at", desc=True).execute()
+        return result.data or []
+    except Exception as e:
+        print(f"[supabase] list_topics failed: {e}")
+        return []
 
 
 def save_topics(topics: list[dict]) -> list[dict]:
     if not _supabase_configured():
         return []
-    sb = get_supabase()
-    result = sb.table("topics").insert(topics).execute()
-    return result.data or []
+    try:
+        sb = get_supabase()
+        result = sb.table("topics").insert(topics).execute()
+        return result.data or []
+    except Exception as e:
+        print(f"[supabase] save_topics failed: {e}")
+        return []
 
 
 def update_topic(topic_id: str, data: dict) -> dict:
     if not _supabase_configured():
         return {}
-    sb = get_supabase()
-    result = sb.table("topics").update(data).eq("id", topic_id).execute()
-    return result.data[0] if result.data else {}
+    try:
+        sb = get_supabase()
+        result = sb.table("topics").update(data).eq("id", topic_id).execute()
+        return result.data[0] if result.data else {}
+    except Exception as e:
+        print(f"[supabase] update_topic failed: {e}")
+        return {}
 
 
 def delete_topic(topic_id: str) -> None:
