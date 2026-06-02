@@ -18,8 +18,9 @@ from .prompts import (
 from db.supabase import get_top_posts_for_context, similarity_search, save_post
 from db.embeddings import embed_text
 
-MODEL_PRIMARY  = "llama-3.3-70b-versatile"   # 100k TPD — best quality
-MODEL_FALLBACK = "llama-3.1-8b-instant"      # 500k TPD — kicks in on rate limits
+MODEL_PRIMARY   = "llama-3.3-70b-versatile"  # 6k TPM, 100k TPD — best quality
+MODEL_FALLBACK  = "llama-3.1-8b-instant"     # 6k TPM, 500k TPD
+MODEL_FALLBACK2 = "gemma2-9b-it"             # 15k TPM, 500k TPD — highest per-minute limit
 
 
 def _make_llm(temperature: float = 0.7, max_output_tokens: int = 4096):
@@ -35,8 +36,13 @@ def _make_llm(temperature: float = 0.7, max_output_tokens: int = 4096):
         temperature=temperature,
         max_tokens=max_output_tokens,
     )
-    # exceptions_to_handle=(Exception,) ensures ALL errors including 429 trigger fallback
-    return primary.with_fallbacks([fallback], exceptions_to_handle=(Exception,))
+    fallback2 = ChatGroq(
+        model=MODEL_FALLBACK2,
+        api_key=os.getenv("GROQ_API_KEY"),
+        temperature=temperature,
+        max_tokens=max_output_tokens,
+    )
+    return primary.with_fallbacks([fallback, fallback2], exceptions_to_handle=(Exception,))
 
 
 def _make_fallback_llm(temperature: float = 0.7, max_output_tokens: int = 4096) -> ChatGroq:
@@ -50,18 +56,20 @@ def _make_fallback_llm(temperature: float = 0.7, max_output_tokens: int = 4096) 
 
 
 async def _ainvoke_with_fallback(messages, temperature=0.7, max_tokens=4096):
-    """Invoke with automatic fallback on any error (rate limit, timeout, etc.)."""
-    try:
-        llm = ChatGroq(
-            model=MODEL_PRIMARY,
-            api_key=os.getenv("GROQ_API_KEY"),
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        return await llm.ainvoke(messages)
-    except Exception:
-        llm = _make_fallback_llm(temperature=temperature, max_output_tokens=max_tokens)
-        return await llm.ainvoke(messages)
+    """Try each model in order — stops at the first one that succeeds."""
+    for model in [MODEL_PRIMARY, MODEL_FALLBACK, MODEL_FALLBACK2]:
+        try:
+            llm = ChatGroq(
+                model=model,
+                api_key=os.getenv("GROQ_API_KEY"),
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return await llm.ainvoke(messages)
+        except Exception as e:
+            if model == MODEL_FALLBACK2:
+                raise  # all models failed — surface the error
+            continue  # try next model
 
 
 def _system() -> SystemMessage:
