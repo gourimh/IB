@@ -8,7 +8,7 @@ export function useWebSocket(sessionId: string | null) {
   const retriesRef = useRef(0)
   const MAX_RETRIES = 3
 
-  const { updateNodeStatus, appendToken, setScores, setComplete, setError } =
+  const { updateNodeStatus, appendToken, setScores, setBusinessImpact, setComplete, setError } =
     useGenerateStore((s) => s.actions)
 
   useEffect(() => {
@@ -41,6 +41,9 @@ export function useWebSocket(sessionId: string | null) {
               break
             case 'scores':
               setScores(msg.data)
+              break
+            case 'business_impact':
+              setBusinessImpact(msg.score, msg.rationale)
               break
             case 'complete':
               closed = true
@@ -81,7 +84,7 @@ export function useWebSocket(sessionId: string | null) {
         wsRef.current.close()
       }
     }
-  }, [sessionId, updateNodeStatus, appendToken, setScores, setComplete, setError])
+  }, [sessionId, updateNodeStatus, appendToken, setScores, setBusinessImpact, setComplete, setError])
 
   return { isConnected }
 }

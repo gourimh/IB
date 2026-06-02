@@ -13,7 +13,9 @@ export function formatScore(score: number | null | undefined): string {
 export function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return '—'
   const d = new Date(dateStr)
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+  const date = d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+  const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })
+  return `${date}, ${time}`
 }
 
 export function truncate(text: string | null | undefined, maxLength: number): string {

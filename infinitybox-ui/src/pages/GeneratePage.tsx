@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Sparkles } from 'lucide-react'
+import { useLocation } from 'react-router-dom'
 import { TopBar } from '../components/layout/TopBar'
 import { TopicForm } from '../components/generate/TopicForm'
 import { AgentPipeline } from '../components/generate/AgentPipeline'
@@ -13,7 +15,7 @@ import { useGenerateStore } from '../store/generateStore'
 import { api } from '../lib/api'
 import { useNavigate } from 'react-router-dom'
 
-export function GeneratePage() {
+export function GeneratePage({ onMenuClick }: { onMenuClick?: () => void }) {
   const navigate = useNavigate()
   const {
     sessionId,
@@ -27,12 +29,37 @@ export function GeneratePage() {
     winner,
     finalPost,
     postId,
+    businessImpactScore,
+    businessImpactRationale,
     error,
     actions,
   } = useGenerateStore()
 
+  const location = useLocation()
   const generate = useGenerate()
   useWebSocket(sessionId)
+
+  const locationState = location.state as {
+    prefill?: { topic: string; tone: string }
+    autoGenerate?: boolean
+  } | null
+
+  const prefill = locationState?.prefill
+
+  // Auto-generate immediately when coming from Topics page
+  useEffect(() => {
+    if (locationState?.autoGenerate && prefill?.topic && status === 'idle') {
+      generate.mutate({
+        topic: prefill.topic,
+        tone: prefill.tone || 'thought-leadership',
+        cta: 'Comment below or DM me to learn more',
+        length: 'medium',
+        include_hashtags: true,
+      })
+      // Clear navigation state so a page refresh doesn't re-trigger
+      window.history.replaceState({}, '')
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const engagement = useEngagement(postId || '')
 
@@ -50,13 +77,14 @@ export function GeneratePage() {
 
   return (
     <div>
-      <TopBar title="Generate" />
-      <div className="p-6 lg:p-8">
-        <div className="flex flex-col lg:flex-row gap-8 max-w-screen-xl">
+      <TopBar title="Generate" onMenuClick={onMenuClick} />
+      <div className="p-4 sm:p-6 lg:p-8">
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8 max-w-screen-xl">
           <div className="lg:w-[38%] shrink-0">
             <TopicForm
               onSubmit={(data) => generate.mutate(data)}
               isLoading={isLoading}
+              prefill={prefill}
             />
           </div>
 
@@ -105,6 +133,8 @@ export function GeneratePage() {
                   <FinalPost
                     post={finalPost}
                     postId={postId}
+                    businessImpactScore={businessImpactScore}
+                    businessImpactRationale={businessImpactRationale}
                     onLogEngagement={(data) => engagement.mutate(data)}
                     onRegenerate={handleRegenerate}
                     engagementLoading={engagement.isPending}

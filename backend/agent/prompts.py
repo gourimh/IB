@@ -225,6 +225,69 @@ LENGTH_CHARS = {
     "long": "1,600–1,900 characters",
 }
 
+BUSINESS_IMPACT_PROMPT = """You are a B2B marketing strategist evaluating LinkedIn content for InfinityBox, a pan-India B2B hygiene and sustainability operations company.
+
+Score this LinkedIn post on how much it will help InfinityBox's business — specifically:
+- Will it attract facility managers, ESG heads, or CFOs to reach out?
+- Does it clearly communicate the ROI and outcomes InfinityBox delivers?
+- Does it use specific proof points (numbers, case studies) that build trust?
+- Does it position InfinityBox as the clear expert and obvious solution?
+- Will it generate inbound leads or conversations with decision-makers?
+
+POST:
+{post}
+
+Return ONLY valid JSON:
+{{
+  "business_impact_score": <float 0-100>,
+  "rationale": "<one sentence explaining the score>"
+}}"""
+
+TOPIC_SCORE_PROMPT = """You are a sharp B2B marketing analyst scoring a LinkedIn topic for InfinityBox — a pan-India B2B hygiene and sustainability operations company serving enterprise facility managers, ESG heads, and CFOs.
+
+InfinityBox proof points to reference: ~30% OPEX reduction, ₹80 lakhs annual savings, 200,000+ kg CO₂ reduced, 900,000+ litres water saved, 250+ client locations.
+
+TOPIC TO SCORE: {title}
+RATIONALE: {rationale}
+TONE: {tone}
+
+You MUST think through each dimension before scoring. Write your analysis inside the JSON fields — this ensures the score reflects actual reasoning about THIS specific topic.
+
+Return ONLY valid JSON with this exact structure:
+{{
+  "company_impact_analysis": "<2-3 sentences: Which InfinityBox service does this showcase? Will it attract the exact buyer — facility manager / ESG head / CFO? Does it create a natural opening to mention specific proof points like cost savings or sustainability metrics?>",
+  "company_impact": <float 0-100, must reflect the analysis above — do NOT default to a round number>,
+  "company_impact_reason": "<one crisp sentence summarising why you gave this score>",
+  "virality_analysis": "<2-3 sentences: Is this topic specific enough to stop a scroll or is it generic? Does it lend itself to a data hook or contrarian angle? Will the Indian enterprise LinkedIn audience comment or share this?>",
+  "virality_potential": <float 0-100, must reflect the analysis above — do NOT default to a round number>,
+  "virality_reason": "<one crisp sentence summarising why you gave this score>"
+}}
+
+Important: scores must genuinely differ based on topic strength. A weak or generic topic should score 40-55. A strong, specific, data-driven topic should score 75-90. Do not assign the same score to every topic."""
+
+TOPIC_GENERATION_PROMPT = """You are a LinkedIn content strategist for InfinityBox, a pan-India B2B hygiene and sustainability operations company.
+
+Generate {count} specific, compelling LinkedIn post topics for InfinityBox.
+
+RECENT TOPICS ALREADY COVERED (avoid repetition):
+{recent_topics}
+
+REQUIREMENTS FOR EACH TOPIC:
+- Highly specific to InfinityBox's services or the Indian enterprise market
+- Timely and relevant for facilities managers, ESG heads, and CFOs
+- Has a clear angle that will drive engagement
+- Not covered in the recent topics above
+
+Return ONLY valid JSON array:
+[
+  {{
+    "title": "<specific topic title>",
+    "rationale": "<why this topic will resonate with InfinityBox's audience — 1 sentence>",
+    "suggested_tone": "<one of: thought-leadership, storytelling, data-driven, contrarian, listicle>",
+    "priority_score": <int 1-10>
+  }}
+]"""
+
 REFINE_PROMPT = """You are an expert LinkedIn content editor for InfinityBox, a B2B hygiene and sustainability operations company in India.
 
 CURRENT POST:

@@ -25,12 +25,15 @@ interface GenerateState {
   winner: 'A' | 'B' | null
   finalPost: string
   postId: string | null
+  businessImpactScore: number | null
+  businessImpactRationale: string
   error: string | null
   actions: {
     startGeneration: (sessionId: string) => void
     updateNodeStatus: (node: string, status: NodeStatusValue) => void
     appendToken: (token: string) => void
     setScores: (data: ScoreData) => void
+    setBusinessImpact: (score: number, rationale: string) => void
     setComplete: (postId: string, finalPost: string) => void
     setError: (msg: string) => void
     reset: () => void
@@ -61,6 +64,8 @@ export const useGenerateStore = create<GenerateState>((set) => ({
   winner: null,
   finalPost: '',
   postId: null,
+  businessImpactScore: null,
+  businessImpactRationale: '',
   error: null,
 
   actions: {
@@ -79,6 +84,8 @@ export const useGenerateStore = create<GenerateState>((set) => ({
         winner: null,
         finalPost: '',
         postId: null,
+        businessImpactScore: null,
+        businessImpactRationale: '',
         error: null,
       }),
 
@@ -99,6 +106,9 @@ export const useGenerateStore = create<GenerateState>((set) => ({
         optimisedA: data.optimised_a || '',
         optimisedB: data.optimised_b || '',
       }),
+
+    setBusinessImpact: (score, rationale) =>
+      set({ businessImpactScore: score, businessImpactRationale: rationale }),
 
     setComplete: (postId, finalPost) =>
       set({
@@ -125,6 +135,8 @@ export const useGenerateStore = create<GenerateState>((set) => ({
         winner: null,
         finalPost: '',
         postId: null,
+        businessImpactScore: null,
+        businessImpactRationale: '',
         error: null,
       }),
   },

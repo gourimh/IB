@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api, type Post, type PostsResponse } from '../lib/api'
 
 export function usePosts(tone?: string, search?: string) {
@@ -15,6 +15,19 @@ export function usePosts(tone?: string, search?: string) {
     getNextPageParam: (lastPage, allPages) => {
       const loaded = allPages.flatMap((p) => p.posts).length
       return loaded < lastPage.total ? allPages.length + 1 : undefined
+    },
+  })
+}
+
+export function useDeletePost() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (postId: string) => {
+      await api.delete(`/api/posts/${postId}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['posts'] })
+      queryClient.invalidateQueries({ queryKey: ['analytics'] })
     },
   })
 }

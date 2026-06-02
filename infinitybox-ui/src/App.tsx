@@ -1,15 +1,17 @@
+import { useState } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Sidebar } from './components/layout/Sidebar'
 import { GeneratePage } from './pages/GeneratePage'
+import { TopicsPage } from './pages/TopicsPage'
 import { LibraryPage } from './pages/LibraryPage'
 import { AnalyticsPage } from './pages/AnalyticsPage'
 import { PostDetailPage } from './pages/PostDetailPage'
 
 const pageVariants = {
-  initial: { opacity: 0, y: 12 },
+  initial: { opacity: 0, y: 8 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -8 },
+  exit: { opacity: 0 },
 }
 
 function AnimatedPage({ children }: { children: React.ReactNode }) {
@@ -19,7 +21,7 @@ function AnimatedPage({ children }: { children: React.ReactNode }) {
       initial="initial"
       animate="animate"
       exit="exit"
-      transition={{ duration: 0.25 }}
+      transition={{ duration: 0.2 }}
     >
       {children}
     </motion.div>
@@ -28,18 +30,29 @@ function AnimatedPage({ children }: { children: React.ReactNode }) {
 
 export function App() {
   const location = useLocation()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   return (
     <div className="flex min-h-screen bg-white">
-      <Sidebar />
-      <main className="flex-1 ml-[220px] min-h-screen bg-white">
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      {/* main — full width on mobile, offset on desktop */}
+      <main className="flex-1 min-h-screen bg-white w-full lg:ml-[220px]">
         <AnimatePresence>
           <Routes location={location} key={location.pathname}>
             <Route
               path="/"
               element={
                 <AnimatedPage>
-                  <GeneratePage />
+                  <GeneratePage onMenuClick={() => setSidebarOpen(true)} />
+                </AnimatedPage>
+              }
+            />
+            <Route
+              path="/topics"
+              element={
+                <AnimatedPage>
+                  <TopicsPage onMenuClick={() => setSidebarOpen(true)} />
                 </AnimatedPage>
               }
             />
@@ -47,7 +60,7 @@ export function App() {
               path="/library"
               element={
                 <AnimatedPage>
-                  <LibraryPage />
+                  <LibraryPage onMenuClick={() => setSidebarOpen(true)} />
                 </AnimatedPage>
               }
             />
@@ -55,7 +68,7 @@ export function App() {
               path="/analytics"
               element={
                 <AnimatedPage>
-                  <AnalyticsPage />
+                  <AnalyticsPage onMenuClick={() => setSidebarOpen(true)} />
                 </AnimatedPage>
               }
             />
@@ -63,7 +76,7 @@ export function App() {
               path="/posts/:id"
               element={
                 <AnimatedPage>
-                  <PostDetailPage />
+                  <PostDetailPage onMenuClick={() => setSidebarOpen(true)} />
                 </AnimatedPage>
               }
             />

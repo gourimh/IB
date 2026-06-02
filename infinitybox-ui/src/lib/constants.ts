@@ -19,6 +19,7 @@ export const NODE_LABELS: Record<string, string> = {
   critique_node: 'Critique',
   optimise_node: 'Optimise',
   score_node: 'Score',
+  business_impact_node: 'Impact',
   save_node: 'Save',
 }
 
@@ -29,6 +30,7 @@ export const NODE_ORDER = [
   'critique_node',
   'optimise_node',
   'score_node',
+  'business_impact_node',
   'save_node',
 ]
 

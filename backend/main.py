@@ -15,7 +15,7 @@ load_dotenv()
 from agent.graph import create_graph, GRAPH_NODE_NAMES, STREAMING_NODES
 from agent.state import AgentState
 from agent.nodes import _make_llm
-from agent.prompts import REFINE_PROMPT
+from agent.prompts import REFINE_PROMPT, TOPIC_GENERATION_PROMPT, TOPIC_SCORE_PROMPT
 from cache.redis import (
     set_job,
     get_job,
@@ -31,6 +31,11 @@ from db.supabase import (
     update_engagement,
     soft_delete_post,
     get_analytics_data,
+    list_topics,
+    save_topics,
+    update_topic,
+    delete_topic,
+    get_recent_post_topics,
 )
 from db.embeddings import embed_text
 
@@ -52,9 +57,15 @@ ALLOWED_ORIGINS = [
     os.getenv("FRONTEND_URL", "https://your-vercel-app.vercel.app"),
 ]
 
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    os.getenv("FRONTEND_URL", ""),   # set this to your Vercel URL in Render env vars
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],   # tighten to ALLOWED_ORIGINS once deployed
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -128,6 +139,8 @@ async def generate(request: Request, body: GenerateRequest):
             "final_post": "",
             "winning_variant": "",
             "post_id": None,
+            "business_impact_score": 0.0,
+            "business_impact_rationale": "",
         },
         "post_id": None,
     }
@@ -195,6 +208,13 @@ async def stream_generation(websocket: WebSocket, session_id: str):
                     }
                     await websocket.send_json({"type": "scores", "data": scores_data})
                     final_post_text = output.get("final_post", "")
+
+                if name == "business_impact_node" and output:
+                    await websocket.send_json({
+                        "type": "business_impact",
+                        "score": output.get("business_impact_score", 0),
+                        "rationale": output.get("business_impact_rationale", ""),
+                    })
 
                 if name == "save_node" and output:
                     post_id = output.get("post_id", "")
@@ -336,11 +356,178 @@ async def regenerate(request: Request, post_id: str):
             "final_post": "",
             "winning_variant": "",
             "post_id": None,
+            "business_impact_score": 0.0,
+            "business_impact_rationale": "",
         },
         "post_id": None,
     }
     set_job(session_id, job_data)
     return {"session_id": session_id}
+
+
+class TopicScoreRequest(BaseModel):
+    title: str
+    rationale: str = ""
+    suggested_tone: str = "thought-leadership"
+
+
+@app.post("/api/topics/score")
+async def score_topic_idea(body: TopicScoreRequest):
+    from langchain_core.messages import HumanMessage
+    import json as _json
+    import re as _re
+    llm = _make_llm(temperature=0.4, max_output_tokens=700)
+    prompt = TOPIC_SCORE_PROMPT.format(
+        title=body.title,
+        rationale=body.rationale or "No rationale provided.",
+        tone=body.suggested_tone,
+    )
+    response = await llm.ainvoke([HumanMessage(content=prompt)])
+    content = response.content if isinstance(response.content, str) else str(response.content)
+    try:
+        text = content
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0]
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0]
+        result = _json.loads(text.strip())
+    except Exception:
+        match = _re.search(r"\{.*\}", content, _re.DOTALL)
+        try:
+            result = _json.loads(match.group()) if match else {}
+        except Exception:
+            result = {}
+    return {
+        "company_impact": float(result.get("company_impact", 60)),
+        "company_impact_reason": str(result.get("company_impact_reason", "")),
+        "virality_potential": float(result.get("virality_potential", 60)),
+        "virality_reason": str(result.get("virality_reason", "")),
+    }
+
+
+class TopicStatusUpdate(BaseModel):
+    status: str = Field(..., pattern="^(pending|used|archived)$")
+    post_id: str = Field(default="")
+
+
+@app.get("/api/topics")
+async def get_topics(status: str = Query(default=None)):
+    topics = list_topics(status=status or None)
+    return {"topics": topics}
+
+
+@app.post("/api/topics/generate")
+async def generate_topics(request: Request, count: int = Query(default=6, ge=1, le=10)):
+    import asyncio
+    from langchain_core.messages import HumanMessage
+    import json as _json
+    import re as _re
+
+    client_ip = request.client.host if request.client else "unknown"
+    if not check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests.")
+
+    recent = get_recent_post_topics(n=15)
+    recent_str = "\n".join(f"- {t}" for t in recent) if recent else "None yet"
+
+    # Step 1 — generate topics
+    llm = _make_llm(temperature=0.9, max_output_tokens=1500)
+    prompt = TOPIC_GENERATION_PROMPT.format(count=count, recent_topics=recent_str)
+    response = await llm.ainvoke([HumanMessage(content=prompt)])
+    content = response.content if isinstance(response.content, str) else str(response.content)
+
+    def _parse_json_list(text: str) -> list:
+        try:
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0]
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0]
+            result = _json.loads(text.strip())
+            if isinstance(result, list):
+                return result
+        except Exception:
+            pass
+        match = _re.search(r"\[.*\]", text, _re.DOTALL)
+        if match:
+            try:
+                return _json.loads(match.group())
+            except Exception:
+                pass
+        return []
+
+    def _parse_json_obj(text: str) -> dict:
+        try:
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0]
+            elif "```" in text:
+                text = text.split("```")[1].split("```")[0]
+            return _json.loads(text.strip())
+        except Exception:
+            pass
+        match = _re.search(r"\{.*\}", text, _re.DOTALL)
+        if match:
+            try:
+                return _json.loads(match.group())
+            except Exception:
+                pass
+        return {}
+
+    topics_raw = [t for t in _parse_json_list(content) if t.get("title")]
+
+    # Step 2 — score all topics in parallel
+    async def _score_one(t: dict) -> dict:
+        try:
+            score_llm = _make_llm(temperature=0.4, max_output_tokens=700)
+            score_prompt = TOPIC_SCORE_PROMPT.format(
+                title=t.get("title", ""),
+                rationale=t.get("rationale", ""),
+                tone=t.get("suggested_tone", "thought-leadership"),
+            )
+            r = await score_llm.ainvoke([HumanMessage(content=score_prompt)])
+            c = r.content if isinstance(r.content, str) else str(r.content)
+            s = _parse_json_obj(c)
+            return {
+                "company_impact": float(s.get("company_impact", 60)),
+                "company_impact_reason": str(s.get("company_impact_reason", "")),
+                "virality_potential": float(s.get("virality_potential", 60)),
+                "virality_reason": str(s.get("virality_reason", "")),
+            }
+        except Exception:
+            return {"company_impact": 0.0, "company_impact_reason": "", "virality_potential": 0.0, "virality_reason": ""}
+
+    scores_list = await asyncio.gather(*[_score_one(t) for t in topics_raw])
+
+    to_save = [
+        {
+            "title": t.get("title", ""),
+            "rationale": t.get("rationale", ""),
+            "suggested_tone": t.get("suggested_tone", "thought-leadership"),
+            "priority_score": int(t.get("priority_score", 5)),
+            "status": "pending",
+            **scores_list[i],
+        }
+        for i, t in enumerate(topics_raw)
+    ]
+
+    saved = save_topics(to_save)
+    return {"topics": saved, "count": len(saved)}
+
+
+@app.delete("/api/topics/{topic_id}")
+async def remove_topic(topic_id: str):
+    delete_topic(topic_id)
+    return {"message": "Topic deleted"}
+
+
+@app.patch("/api/topics/{topic_id}")
+async def patch_topic(topic_id: str, body: TopicStatusUpdate):
+    data: dict = {"status": body.status}
+    if body.status == "used":
+        data["used_at"] = datetime.now(timezone.utc).isoformat()
+        if body.post_id:
+            data["post_id"] = body.post_id
+    updated = update_topic(topic_id, data)
+    return updated
 
 
 @app.post("/api/refine")

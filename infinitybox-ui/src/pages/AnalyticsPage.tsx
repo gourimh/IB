@@ -6,13 +6,13 @@ import { TopPosts } from '../components/analytics/TopPosts'
 import { Spinner } from '../components/ui/Spinner'
 import { useAnalytics } from '../hooks/useAnalytics'
 
-export function AnalyticsPage() {
+export function AnalyticsPage({ onMenuClick }: { onMenuClick?: () => void }) {
   const { data, isLoading, error } = useAnalytics()
 
   return (
     <div>
-      <TopBar title="Analytics" />
-      <div className="p-6 lg:p-8 space-y-6">
+      <TopBar title="Analytics" onMenuClick={onMenuClick} />
+      <div className="p-4 sm:p-6 lg:p-8 space-y-6">
         {isLoading && (
           <div className="flex justify-center py-16">
             <Spinner size="lg" />

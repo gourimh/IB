@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { CheckCircle, RefreshCw, TrendingUp, Wand2, ChevronDown } from 'lucide-react'
+import { CheckCircle, RefreshCw, TrendingUp, Wand2, ChevronDown, Target } from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useForm } from 'react-hook-form'
 import { Card } from '../ui/Card'
@@ -14,6 +14,8 @@ import type { EngagementPayload, RefineResponse } from '../../lib/api'
 interface FinalPostProps {
   post: string
   postId: string
+  businessImpactScore?: number | null
+  businessImpactRationale?: string
   onLogEngagement: (data: EngagementPayload) => void
   onRegenerate?: () => void
   engagementLoading?: boolean
@@ -22,6 +24,8 @@ interface FinalPostProps {
 export function FinalPost({
   post,
   postId,
+  businessImpactScore,
+  businessImpactRationale,
   onLogEngagement,
   onRegenerate,
   engagementLoading,
@@ -94,6 +98,33 @@ export function FinalPost({
           )}
         </div>
       </div>
+
+      {businessImpactScore != null && (
+        <div className={cn(
+          'mb-3 px-4 py-3 rounded-xl border flex items-start gap-3',
+          businessImpactScore >= 75
+            ? 'bg-brand-teal-light border-brand-teal'
+            : businessImpactScore >= 50
+            ? 'bg-brand-amber-light border-brand-amber'
+            : 'bg-status-error-light border-status-error'
+        )}>
+          <Target size={15} className={cn(
+            'mt-0.5 shrink-0',
+            businessImpactScore >= 75 ? 'text-brand-teal' : businessImpactScore >= 50 ? 'text-brand-amber' : 'text-status-error'
+          )} />
+          <div>
+            <span className={cn(
+              'text-xs font-bold',
+              businessImpactScore >= 75 ? 'text-brand-teal' : businessImpactScore >= 50 ? 'text-brand-amber' : 'text-status-error'
+            )}>
+              Business Impact: {businessImpactScore.toFixed(0)}/100
+            </span>
+            {businessImpactRationale && (
+              <p className="text-xs text-text-secondary mt-0.5">{businessImpactRationale}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       <Card className="p-5">
         <div className="prose-linkedin text-text-primary select-text">{displayPost}</div>

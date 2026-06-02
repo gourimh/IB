@@ -79,7 +79,7 @@ function Accordion({ title, children }: { title: string; children: React.ReactNo
   )
 }
 
-export function PostDetailPage() {
+export function PostDetailPage({ onMenuClick }: { onMenuClick?: () => void }) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { data: post, isLoading } = usePost(id)
@@ -110,7 +110,7 @@ export function PostDetailPage() {
   if (isLoading) {
     return (
       <div>
-        <TopBar title="Post detail" />
+        <TopBar title="Post detail" onMenuClick={onMenuClick} />
         <div className="flex justify-center py-16">
           <Spinner size="lg" />
         </div>
@@ -121,7 +121,7 @@ export function PostDetailPage() {
   if (!post) {
     return (
       <div>
-        <TopBar title="Post detail" />
+        <TopBar title="Post detail" onMenuClick={onMenuClick} />
         <div className="p-8 text-text-muted">Post not found.</div>
       </div>
     )
@@ -131,8 +131,8 @@ export function PostDetailPage() {
 
   return (
     <div>
-      <TopBar title="Post detail" />
-      <div className="p-6 lg:p-8">
+      <TopBar title="Post detail" onMenuClick={onMenuClick} />
+      <div className="p-4 sm:p-6 lg:p-8">
         <button
           onClick={() => navigate(-1)}
           className="flex items-center gap-1.5 text-sm text-text-muted hover:text-text-primary mb-6 transition-colors"
@@ -222,6 +222,21 @@ export function PostDetailPage() {
                     <span className="text-sm text-text-muted">Not logged</span>
                   )}
                 </div>
+
+                {(post as any).business_impact_score > 0 && (
+                  <div>
+                    <div className="text-2xs text-text-muted mb-0.5">Business impact</div>
+                    <div className="text-2xl font-bold text-brand-purple">
+                      {(post as any).business_impact_score.toFixed(0)}
+                      <span className="text-xs font-normal text-text-muted">/100</span>
+                    </div>
+                    {(post as any).business_impact_rationale && (
+                      <p className="text-xs text-text-muted mt-1 leading-relaxed">
+                        {(post as any).business_impact_rationale}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <div className="text-2xs text-text-muted mb-0.5">Winner</div>

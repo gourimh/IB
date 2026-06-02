@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import * as Select from '@radix-ui/react-select'
 import * as Switch from '@radix-ui/react-switch'
@@ -10,10 +11,11 @@ import type { GenerateRequest } from '../../lib/api'
 interface TopicFormProps {
   onSubmit: (data: GenerateRequest) => void
   isLoading: boolean
+  prefill?: { topic: string; tone: string }
 }
 
-export function TopicForm({ onSubmit, isLoading }: TopicFormProps) {
-  const { register, handleSubmit, control, watch } = useForm<GenerateRequest>({
+export function TopicForm({ onSubmit, isLoading, prefill }: TopicFormProps) {
+  const { register, handleSubmit, control, watch, setValue } = useForm<GenerateRequest>({
     defaultValues: {
       topic: '',
       tone: 'thought-leadership',
@@ -22,6 +24,13 @@ export function TopicForm({ onSubmit, isLoading }: TopicFormProps) {
       include_hashtags: true,
     },
   })
+
+  useEffect(() => {
+    if (prefill) {
+      setValue('topic', prefill.topic)
+      setValue('tone', prefill.tone)
+    }
+  }, [prefill, setValue])
 
   const selectedLength = watch('length')
 

@@ -1,7 +1,10 @@
 import axios from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
-export const WS_BASE = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000'
+export const WS_BASE = import.meta.env.VITE_WS_BASE_URL ||
+  (typeof window !== 'undefined' && window.location.protocol === 'https:'
+    ? `wss://${window.location.host}`
+    : 'ws://localhost:8000')
 
 export const api = axios.create({
   baseURL: API_BASE,
@@ -81,6 +84,26 @@ export interface RefineRequest {
 
 export interface RefineResponse {
   refined_post: string
+}
+
+export interface Topic {
+  id: string
+  title: string
+  rationale: string
+  suggested_tone: string
+  priority_score: number
+  status: 'pending' | 'used' | 'archived'
+  created_at: string
+  used_at: string | null
+  post_id: string | null
+  company_impact: number
+  company_impact_reason: string
+  virality_potential: number
+  virality_reason: string
+}
+
+export interface TopicsResponse {
+  topics: Topic[]
 }
 
 export interface ChatSaveRequest {

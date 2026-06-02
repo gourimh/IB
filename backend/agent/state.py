@@ -22,3 +22,5 @@ class AgentState(TypedDict):
     winning_variant: str
     session_id: str
     post_id: Optional[str]
+    business_impact_score: float
+    business_impact_rationale: str

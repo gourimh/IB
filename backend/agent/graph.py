@@ -8,6 +8,7 @@ from .nodes import (
     critique_node,
     optimise_node,
     score_node,
+    business_impact_node,
     save_node,
 )
 
@@ -21,6 +22,7 @@ def create_graph():
     builder.add_node("critique_node", critique_node)
     builder.add_node("optimise_node", optimise_node)
     builder.add_node("score_node", score_node)
+    builder.add_node("business_impact_node", business_impact_node)
     builder.add_node("save_node", save_node)
 
     builder.set_entry_point("context_loader")
@@ -29,7 +31,8 @@ def create_graph():
     builder.add_edge("draft_node", "critique_node")
     builder.add_edge("critique_node", "optimise_node")
     builder.add_edge("optimise_node", "score_node")
-    builder.add_edge("score_node", "save_node")
+    builder.add_edge("score_node", "business_impact_node")
+    builder.add_edge("business_impact_node", "save_node")
     builder.add_edge("save_node", END)
 
     return builder.compile()
@@ -42,6 +45,7 @@ GRAPH_NODE_NAMES = {
     "critique_node",
     "optimise_node",
     "score_node",
+    "business_impact_node",
     "save_node",
 }
 

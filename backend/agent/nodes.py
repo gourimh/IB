@@ -12,21 +12,56 @@ from .prompts import (
     CRITIQUE_PROMPT,
     OPTIMISE_PROMPT,
     SCORE_PROMPT,
+    BUSINESS_IMPACT_PROMPT,
     LENGTH_CHARS,
 )
 from db.supabase import get_top_posts_for_context, similarity_search, save_post
 from db.embeddings import embed_text
 
-MODEL = "llama-3.3-70b-versatile"
+MODEL_PRIMARY  = "llama-3.3-70b-versatile"   # 100k TPD — best quality
+MODEL_FALLBACK = "llama-3.1-8b-instant"      # 500k TPD — kicks in on rate limits
 
 
-def _make_llm(temperature: float = 0.7, max_output_tokens: int = 4096) -> ChatGroq:
-    return ChatGroq(
-        model=MODEL,
+def _make_llm(temperature: float = 0.7, max_output_tokens: int = 4096):
+    primary = ChatGroq(
+        model=MODEL_PRIMARY,
         api_key=os.getenv("GROQ_API_KEY"),
         temperature=temperature,
         max_tokens=max_output_tokens,
     )
+    fallback = ChatGroq(
+        model=MODEL_FALLBACK,
+        api_key=os.getenv("GROQ_API_KEY"),
+        temperature=temperature,
+        max_tokens=max_output_tokens,
+    )
+    # exceptions_to_handle=(Exception,) ensures ALL errors including 429 trigger fallback
+    return primary.with_fallbacks([fallback], exceptions_to_handle=(Exception,))
+
+
+def _make_fallback_llm(temperature: float = 0.7, max_output_tokens: int = 4096) -> ChatGroq:
+    """Direct fallback LLM — used when primary is rate-limited during streaming."""
+    return ChatGroq(
+        model=MODEL_FALLBACK,
+        api_key=os.getenv("GROQ_API_KEY"),
+        temperature=temperature,
+        max_tokens=max_output_tokens,
+    )
+
+
+async def _ainvoke_with_fallback(messages, temperature=0.7, max_tokens=4096):
+    """Invoke with automatic fallback on any error (rate limit, timeout, etc.)."""
+    try:
+        llm = ChatGroq(
+            model=MODEL_PRIMARY,
+            api_key=os.getenv("GROQ_API_KEY"),
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return await llm.ainvoke(messages)
+    except Exception:
+        llm = _make_fallback_llm(temperature=temperature, max_output_tokens=max_tokens)
+        return await llm.ainvoke(messages)
 
 
 def _system() -> SystemMessage:
@@ -119,8 +154,6 @@ async def research_node(state: AgentState) -> dict:
 
 
 async def draft_node(state: AgentState) -> dict:
-    llm = _make_llm(temperature=0.8, max_output_tokens=2500)
-
     length = state.get("length", "medium")
     cta = state.get("cta") or "Comment below or DM me to learn more"
 
@@ -135,7 +168,7 @@ async def draft_node(state: AgentState) -> dict:
         style_guidance=state.get("style_vector_guidance") or "Use the proven InfinityBox post structure.",
     )
 
-    response = await llm.ainvoke([_system(), HumanMessage(content=prompt)])
+    response = await _ainvoke_with_fallback([_system(), HumanMessage(content=prompt)], temperature=0.8, max_tokens=2500)
     content = response.content if isinstance(response.content, str) else str(response.content)
 
     draft_a, draft_b = _parse_drafts(content)
@@ -143,10 +176,11 @@ async def draft_node(state: AgentState) -> dict:
 
 
 async def critique_node(state: AgentState) -> dict:
-    llm = _make_llm(temperature=0.3, max_output_tokens=500)
-
     async def critique_one(post: str) -> dict:
-        response = await llm.ainvoke([HumanMessage(content=CRITIQUE_PROMPT.format(post=post))])
+        response = await _ainvoke_with_fallback(
+            [HumanMessage(content=CRITIQUE_PROMPT.format(post=post))],
+            temperature=0.3, max_tokens=500,
+        )
         content = response.content if isinstance(response.content, str) else str(response.content)
         return _parse_json_response(content)
 
@@ -156,11 +190,12 @@ async def critique_node(state: AgentState) -> dict:
 
 
 async def optimise_node(state: AgentState) -> dict:
-    llm = _make_llm(temperature=0.7, max_output_tokens=1500)
-
     async def optimise_one(post: str, critique: dict) -> str:
         prompt = OPTIMISE_PROMPT.format(post=post, critique=json.dumps(critique, indent=2))
-        response = await llm.ainvoke([_system(), HumanMessage(content=prompt)])
+        response = await _ainvoke_with_fallback(
+            [_system(), HumanMessage(content=prompt)],
+            temperature=0.7, max_tokens=1500,
+        )
         return response.content if isinstance(response.content, str) else str(response.content)
 
     optimised_a = await optimise_one(state.get("draft_a", ""), state.get("critique_a", {}))
@@ -169,13 +204,11 @@ async def optimise_node(state: AgentState) -> dict:
 
 
 async def score_node(state: AgentState) -> dict:
-    llm = _make_llm(temperature=0.1, max_output_tokens=400)
-
     prompt = SCORE_PROMPT.format(
         post_a=state.get("optimised_a", state.get("draft_a", "")),
         post_b=state.get("optimised_b", state.get("draft_b", "")),
     )
-    response = await llm.ainvoke([HumanMessage(content=prompt)])
+    response = await _ainvoke_with_fallback([HumanMessage(content=prompt)], temperature=0.1, max_tokens=400)
     content = response.content if isinstance(response.content, str) else str(response.content)
     scores = _parse_json_response(content)
 
@@ -190,6 +223,23 @@ async def score_node(state: AgentState) -> dict:
         "winning_variant": winner,
         "final_post": final_post,
     }
+
+
+async def business_impact_node(state: AgentState) -> dict:
+    final_post = state.get("final_post", "")
+    try:
+        response = await _ainvoke_with_fallback(
+            [HumanMessage(content=BUSINESS_IMPACT_PROMPT.format(post=final_post))],
+            temperature=0.1, max_tokens=300,
+        )
+        content = response.content if isinstance(response.content, str) else str(response.content)
+        result = _parse_json_response(content)
+        score = float(result.get("business_impact_score", 60.0))
+        rationale = str(result.get("rationale", ""))
+    except Exception:
+        score = 60.0
+        rationale = ""
+    return {"business_impact_score": score, "business_impact_rationale": rationale}
 
 
 async def save_node(state: AgentState) -> dict:
@@ -216,6 +266,8 @@ async def save_node(state: AgentState) -> dict:
         "critique_a": state.get("critique_a", {}),
         "critique_b": state.get("critique_b", {}),
         "research_context": state.get("research_context", ""),
+        "business_impact_score": state.get("business_impact_score", 0),
+        "business_impact_rationale": state.get("business_impact_rationale", ""),
         "embedding": embedding,
     })
 

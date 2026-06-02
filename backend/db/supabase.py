@@ -87,6 +87,55 @@ def soft_delete_post(post_id: str) -> None:
     sb.table("posts").update({"deleted_at": datetime.now(timezone.utc).isoformat()}).eq("id", post_id).execute()
 
 
+def list_topics(status: str | None = None) -> list[dict]:
+    if not _supabase_configured():
+        return []
+    sb = get_supabase()
+    query = sb.table("topics").select("*")
+    if status:
+        query = query.eq("status", status)
+    result = query.order("priority_score", desc=True).order("created_at", desc=True).execute()
+    return result.data or []
+
+
+def save_topics(topics: list[dict]) -> list[dict]:
+    if not _supabase_configured():
+        return []
+    sb = get_supabase()
+    result = sb.table("topics").insert(topics).execute()
+    return result.data or []
+
+
+def update_topic(topic_id: str, data: dict) -> dict:
+    if not _supabase_configured():
+        return {}
+    sb = get_supabase()
+    result = sb.table("topics").update(data).eq("id", topic_id).execute()
+    return result.data[0] if result.data else {}
+
+
+def delete_topic(topic_id: str) -> None:
+    if not _supabase_configured():
+        return
+    sb = get_supabase()
+    sb.table("topics").delete().eq("id", topic_id).execute()
+
+
+def get_recent_post_topics(n: int = 15) -> list[str]:
+    if not _supabase_configured():
+        return []
+    sb = get_supabase()
+    result = (
+        sb.table("posts")
+        .select("topic")
+        .is_("deleted_at", "null")
+        .order("created_at", desc=True)
+        .limit(n)
+        .execute()
+    )
+    return [r["topic"] for r in (result.data or []) if r.get("topic")]
+
+
 def get_analytics_data() -> dict:
     if not _supabase_configured():
         return {

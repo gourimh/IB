@@ -93,6 +93,33 @@ AS $$
   LIMIT match_count;
 $$;
 
+-- ============================================================
+-- V2 MIGRATIONS — run these after the v1 migrations above
+-- ============================================================
+
+-- 6. Add business impact columns to posts
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS business_impact_score FLOAT DEFAULT 0;
+ALTER TABLE posts ADD COLUMN IF NOT EXISTS business_impact_rationale TEXT DEFAULT '';
+
+-- 7. Topics table
+CREATE TABLE IF NOT EXISTS topics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  rationale TEXT,
+  suggested_tone TEXT DEFAULT 'thought-leadership',
+  priority_score INT DEFAULT 5,
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  used_at TIMESTAMPTZ DEFAULT NULL,
+  post_id UUID REFERENCES posts(id) DEFAULT NULL
+);
+
+ALTER TABLE topics DISABLE ROW LEVEL SECURITY;
+
+CREATE INDEX IF NOT EXISTS topics_status_idx ON topics (status);
+CREATE INDEX IF NOT EXISTS topics_created_idx ON topics (created_at DESC);
+
+-- ============================================================
 -- If you already ran the old migration with VECTOR(1536), run this to migrate:
 -- ALTER TABLE posts ALTER COLUMN embedding TYPE VECTOR(768) USING NULL;
 -- DROP FUNCTION IF EXISTS match_posts(VECTOR(1536), INT);
