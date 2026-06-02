@@ -181,7 +181,7 @@ export function TopicForm({ onSubmit, isLoading, prefill }: TopicFormProps) {
       </Button>
 
       <p className="text-center text-2xs text-text-muted">
-        Powered by Gemini 2.5 Flash + LangGraph
+        Powered by Llama 3.3 · Groq · LangGraph
       </p>
     </form>
   )
